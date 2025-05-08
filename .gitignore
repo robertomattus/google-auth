@@ -37,11 +37,11 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Build directories (en caso de que compiles o empaquetes más adelante)
+# Build directories 
 dist/
 build/
 tmp/
 temp/
 
-# MongoDB dump (si llegas a usar esto en dev)
+# MongoDB dump 
 dump/
