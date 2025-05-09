@@ -8,7 +8,7 @@ const nodemailer = require("nodemailer");
 
 // Configura el transporter de Nodemailer
 const transporter = nodemailer.createTransport({
-  service: "gmail", // o tu servicio de correo preferido
+  service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -65,16 +65,13 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("[LOGIN] Datos recibidos:", email, password);
 
     const user = await User.findOne({ email });
     if (!user) {
-      console.log("[LOGIN] Usuario no encontrado");
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     if (!user.isVerified) {
-      console.log("[LOGIN] Usuario no verificado");
       return res.status(401).json({
         message: "Please verify your email before logging in",
       });
@@ -82,7 +79,6 @@ const login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      console.log("[LOGIN] Contraseña incorrecta");
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
@@ -92,10 +88,8 @@ const login = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    console.log("[LOGIN] Token generado:", token);
     res.json({ token });
   } catch (error) {
-    console.error("[LOGIN] Error en login:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
@@ -158,4 +152,78 @@ const resendVerificationEmail = async (req, res) => {
   }
 };
 
-module.exports = { register, login, verifyEmail, resendVerificationEmail };
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" } // Token válido por 15 minutos
+    );
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${user._id}/${token}`;
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password reset request",
+      text: `Click the link to reset your password: ${resetUrl}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: "Password reset email sent" });
+  } catch (error) {
+    console.error("[FORGOT PASSWORD] Error:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  const { id, token } = req.params;
+  const { password } = req.body;
+
+  try {
+    if (!password || password.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 6 characters" });
+    }
+
+    // Verificar el token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.userId !== id) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Encriptar la nueva contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password reset successful" });
+  } catch (error) {
+    console.error("[RESET PASSWORD] Error:", error);
+    res.status(400).json({ message: "Invalid or expired token", error });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  verifyEmail,
+  resendVerificationEmail,
+  forgotPassword,
+  resetPassword,
+};
