@@ -3,14 +3,14 @@ const router = express.Router();
 const authMiddleware = require("../../middlewares/auth.middleware");
 const checkRole = require("../../middlewares/role.middleware");
 
-// Ruta de prueba: solo accesible por usuarios autenticados
+// Profile route
 router.get("/profile", authMiddleware, (req, res) => {
   res.json({ message: "Welcome!", user: req.user });
 });
 
-// Ruta para admins solamente
+// Admin dashboard route
 router.get("/dashboard", authMiddleware, checkRole(["admin"]), (req, res) => {
-  res.json({ message: `Bienvenido al panel de admin, ${req.user.email}` });
+  res.json({ message: `Welcome to admin panel, ${req.user.email}` });
 });
 
 module.exports = router;
